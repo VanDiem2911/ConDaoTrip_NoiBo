@@ -60,7 +60,7 @@ export default async function LoginPage() {
         </section>
 
         <section className="pb-4 lg:pb-0">
-          <LoginForm showDemo={process.env.NODE_ENV !== "production"} />
+          <LoginForm showDemo={process.env.DEMO_LOGIN !== "off"} />
           <p className="mt-5 text-center text-xs text-brand-100/70">© 2026 Công ty TNHH MTV Du lịch Sinh thái và Môi trường Côn Đảo</p>
         </section>
       </div>

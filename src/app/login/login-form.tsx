@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, BriefcaseBusiness, Eye, EyeOff, Lock, Mail, Phone, Route as RouteIcon, UserRound, Wallet, CircleAlert } from "lucide-react";
+import { ArrowRight, BriefcaseBusiness, Eye, EyeOff, Lock, Mail, Phone, Route as RouteIcon, UserRound, Wallet, CircleAlert, Loader2 } from "lucide-react";
 import { Button, Field, Input, Select, cn } from "@/components/ui";
 import { http } from "@/components/hooks";
 
@@ -21,7 +21,23 @@ export function LoginForm({ showDemo }: { showDemo: boolean }) {
   const [busy, setBusy] = useState(false);
   const [show, setShow] = useState(false);
   const errId = useId();
+  const [quick, setQuick] = useState("");
   const set = (k: string, v: string) => setF((s) => ({ ...s, [k]: v }));
+
+  // Bấm vai trò là vào luôn, không cần nhập hay bấm Đăng nhập
+  async function quickLogin(email: string) {
+    if (quick || busy) return;
+    setErr("");
+    setQuick(email);
+    try {
+      await http("POST", "/api/auth/demo", { email });
+      router.replace("/");
+      router.refresh();
+    } catch (x) {
+      setErr(x instanceof Error ? x.message : "Có lỗi xảy ra");
+      setQuick("");
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -125,24 +141,26 @@ export function LoginForm({ showDemo }: { showDemo: boolean }) {
       {showDemo && mode === "login" && (
         <div className="mt-6 border-t border-line pt-5">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-3">
-            Dùng thử nhanh <span className="font-medium normal-case tracking-normal">· bấm để điền (mật khẩu ConDao@2026)</span>
+            Dùng thử nhanh <span className="font-medium normal-case tracking-normal">· bấm vai trò để vào luôn</span>
           </p>
           <div className="grid grid-cols-2 gap-2.5">
             {DEMO.map((d) => {
-              const on = f.email === d.email;
+              const on = quick === d.email;
               return (
                 <button
                   key={d.email}
                   type="button"
-                  aria-pressed={on}
-                  onClick={() => setF((s) => ({ ...s, email: d.email, password: "ConDao@2026" }))}
+                  disabled={!!quick}
+                  aria-busy={on}
+                  aria-label={`Vào nhanh với vai trò ${d.label}`}
+                  onClick={() => quickLogin(d.email)}
                   className={cn(
-                    "flex min-h-[60px] items-center gap-2.5 rounded-2xl p-2.5 text-left ring-1 ring-inset transition-all duration-200",
-                    on ? "bg-brand-100 ring-brand-500" : "bg-white ring-line hover:bg-brand-50 hover:ring-brand-300",
+                    "flex min-h-[60px] items-center gap-2.5 rounded-2xl p-2.5 text-left ring-1 ring-inset transition-all duration-200 active:scale-[0.98] disabled:cursor-wait",
+                    on ? "bg-brand-100 ring-brand-500" : "bg-white ring-line hover:bg-brand-50 hover:ring-brand-300 disabled:opacity-60",
                   )}
                 >
                   <span className={cn("grid size-9 shrink-0 place-items-center rounded-xl transition-colors", on ? "bg-brand-600 text-white" : "bg-brand-100 text-brand-600")}>
-                    <d.icon className="size-[18px]" strokeWidth={1.9} aria-hidden />
+                    {on ? <Loader2 className="size-[18px] animate-spin" aria-hidden /> : <d.icon className="size-[18px]" strokeWidth={1.9} aria-hidden />}
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate text-[13px] font-bold text-ink">{d.label}</span>

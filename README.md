@@ -20,4 +20,6 @@ npm run dev                  # http://localhost:3000
 
 ## Luồng nghiệp vụ
 Báo giá (đa tiền tệ, mỗi đoàn 1 báo giá) → Xác nhận → Booking → Điều hành xếp từng dịch vụ (NCC + giá vốn + thông tin đã xếp) → Thu tiền/Công nợ → Doanh thu, lợi nhuận, hoa hồng.
+Đăng nhập nhanh (thẻ vai trò ở trang đăng nhập) bật mặc định; đặt DEMO_LOGIN=off để tắt khi dùng thật.
+
 Hoa hồng = % × lợi nhuận gộp (doanh thu − giá vốn đã xếp), % đặt theo từng sale (Cài đặt).
