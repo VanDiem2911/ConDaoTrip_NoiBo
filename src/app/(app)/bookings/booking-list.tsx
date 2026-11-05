@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { CalendarCheck, Search } from "lucide-react";
-import { Badge, Card, Cover, Empty, Input, Progress, cn } from "@/components/ui";
+import { Badge, Button, Card, Cover, Empty, Input, Progress, cn } from "@/components/ui";
 import { fmtDate, fmtVnd } from "@/lib/money";
 import type { Role } from "@/lib/types";
 import type { listBookings } from "@/lib/data";
@@ -14,6 +14,7 @@ export function BookingList({ bookings, role }: { bookings: Row[]; role: Role })
   const [q, setQ] = useState("");
   const [kind, setKind] = useState<"all" | "package" | "retail">("all");
   const [when, setWhen] = useState<"all" | "upcoming" | "past">("all");
+  const [limit, setLimit] = useState(60);
   const back = role === "operator" || role === "accountant";
   const today = new Date().toISOString().slice(0, 10);
   const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d");
@@ -60,11 +61,11 @@ export function BookingList({ bookings, role }: { bookings: Row[]; role: Role })
               </tr>
             </thead>
             <tbody>
-              {rows.map((b) => (
+              {rows.slice(0, limit).map((b) => (
                 <tr key={b.id}>
                   <td>
                     <Link href={`/bookings/${b.id}`} className="group flex min-w-[250px] items-center gap-3">
-                      <Cover src={b.cover} className="size-11 shrink-0 rounded-xl" />
+                      <Cover src={b.cover} w={128} className="size-11 shrink-0 rounded-xl" />
                       <span className="min-w-0">
                         <span className="block truncate font-semibold text-ink group-hover:text-brand-700">{b.groupName}</span>
                         <span className="block truncate text-xs text-ink-3">{b.code} · {b.customerName}</span>
@@ -85,6 +86,11 @@ export function BookingList({ bookings, role }: { bookings: Row[]; role: Role })
           </table>
         </div>
       )}
+        {rows.length > limit && (
+          <div className="border-t border-line/70 p-3 text-center">
+            <Button variant="ghost" size="sm" onClick={() => setLimit((n) => n + 60)}>Xem thêm booking ({rows.length - limit} còn lại)</Button>
+          </div>
+        )}
     </Card>
   );
 }

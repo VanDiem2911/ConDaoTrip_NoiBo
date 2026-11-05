@@ -1,6 +1,7 @@
 import { ApiError, apiUser, body, num, route, str } from "@/lib/api";
 import { BACKOFFICE } from "@/lib/access";
 import { col } from "@/lib/db";
+import { invalidate } from "@/lib/cache";
 import type { Service, Tour } from "@/lib/types";
 
 /** Chỉnh giá bán tham khảo / mở – đóng tour hoặc dịch vụ (type = tours | services) */
@@ -19,5 +20,6 @@ export const PATCH = route<{ type: string; id: string }>(async (req, { params })
       ? await (await col<Tour>("tours")).updateOne({ _id: id }, { $set: set })
       : await (await col<Service>("services")).updateOne({ _id: id }, { $set: set });
   if (!r.matchedCount) throw new ApiError(404, "Không tìm thấy");
+  invalidate("catalog");
   return { ok: true };
 });

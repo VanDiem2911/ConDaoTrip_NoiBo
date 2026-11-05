@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { isBackoffice } from "@/lib/access";
-import { getBookingDetail, getOperations, listStaff } from "@/lib/data";
+import { getActiveSuppliers, getBookingDetail, listStaff } from "@/lib/data";
 import { BookingDetail } from "./booking-detail";
 
 export const metadata = { title: "Chi tiết booking" };
@@ -14,7 +14,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
   const detail = await getBookingDetail(id, user);
   if (!detail) notFound();
   const back = isBackoffice(user.role);
-  const [ops, staff] = back ? await Promise.all([getOperations(), listStaff()]) : [null, []];
+  const [suppliers, staff] = back ? await Promise.all([getActiveSuppliers(), listStaff()]) : [[], []];
   return (
     <>
       <Link href="/bookings" className="mb-4 inline-flex min-h-10 items-center gap-1.5 rounded-lg text-sm font-semibold text-ink-2 hover:text-brand-700">
@@ -25,7 +25,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
         booking={detail.booking}
         finance={detail.finance}
         payments={detail.payments}
-        suppliers={ops?.suppliers ?? []}
+        suppliers={suppliers}
         sales={staff.filter((s) => s.role === "sale").map((s) => ({ id: s.id, name: s.name, rate: s.commissionRate ?? 0 }))}
       />
     </>

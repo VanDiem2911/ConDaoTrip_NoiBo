@@ -1,6 +1,7 @@
 import { ApiError, apiUser, body, num, route } from "@/lib/api";
 import { BACKOFFICE } from "@/lib/access";
 import { col } from "@/lib/db";
+import { invalidate } from "@/lib/cache";
 import type { User } from "@/lib/types";
 
 export const PATCH = route<{ id: string }>(async (req, { params }) => {
@@ -16,5 +17,6 @@ export const PATCH = route<{ id: string }>(async (req, { params }) => {
   if (!Object.keys(set).length) throw new ApiError(400, "Không có thay đổi");
   const r = await (await col<User>("users")).updateOne({ _id: id }, { $set: set });
   if (!r.matchedCount) throw new ApiError(404, "Không tìm thấy tài khoản");
+  invalidate("user:");
   return { ok: true };
 });

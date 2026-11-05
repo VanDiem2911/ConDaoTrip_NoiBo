@@ -178,10 +178,12 @@ export function Avatar({ name, className }: { name: string; className?: string }
 }
 
 /* Hình bìa tour: ảnh thật, hoặc khối gradient nếu chưa có */
-export function Cover({ src, alt = "", className }: { src?: string; alt?: string; className?: string }) {
+export function Cover({ src, alt = "", className, w = 800, priority }: { src?: string; alt?: string; className?: string; w?: number; priority?: boolean }) {
   if (!src) {
     return <div aria-hidden className={cn("bg-gradient-to-br from-brand-300 via-brand-500 to-sea-700", className)} />;
   }
+  // Ảnh Cloudinary: xin đúng độ rộng cần hiển thị (thumbnail 44–56px chỉ cần ~128px, không tải bản 800px)
+  const url = src.replace(/(\/image\/upload\/[^/]*?)w_\d+/, `$1w_${w}`);
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={src} alt={alt} loading="lazy" decoding="async" className={cn("object-cover", className)} />;
+  return <img src={url} alt={alt} loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : undefined} decoding="async" className={cn("object-cover", className)} />;
 }

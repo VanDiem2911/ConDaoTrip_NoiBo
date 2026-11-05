@@ -4,6 +4,7 @@ config({ path: ".env.local" });
 
 import bcrypt from "bcryptjs";
 import { getDb } from "../src/lib/db";
+import { ensureIndexes } from "../src/lib/indexes";
 import { SERVICE_SEEDS, TOUR_SEEDS, cloudImg } from "../src/lib/catalog";
 import { buildBooking, bookingFinance, splitQuote } from "../src/lib/booking";
 import { DEFAULT_RATES } from "../src/lib/money";
@@ -271,13 +272,7 @@ async function main() {
   await db.collection("transactions").insertMany(txs as never[]);
   await db.collection("counters").insertMany(Object.entries(seq).map(([k, v]) => ({ _id: k, seq: v })) as never[]);
 
-  // chỉ mục
-  await db.collection("users").createIndex({ email: 1 }, { unique: true });
-  await db.collection("bookings").createIndex({ travelDate: 1 });
-  await db.collection("bookings").createIndex({ saleId: 1 });
-  await db.collection("transactions").createIndex({ bookingId: 1 });
-  await db.collection("transactions").createIndex({ supplierId: 1 });
-  await db.collection("quotes").createIndex({ createdBy: 1 });
+  await ensureIndexes(db);
 
   console.log(`✔ Đã ghi: ${users.length} người dùng, ${customers.length} khách hàng, ${tours.length} tour, ${services.length} dịch vụ,`);
   console.log(`  ${suppliers.length} NCC, ${quotes.length} báo giá, ${bookings.length} booking, ${txs.length} giao dịch thu/chi.`);

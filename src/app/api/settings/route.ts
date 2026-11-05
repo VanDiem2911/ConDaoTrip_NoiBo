@@ -1,6 +1,7 @@
 import { apiUser, body, num, route } from "@/lib/api";
 import { BACKOFFICE } from "@/lib/access";
 import { col } from "@/lib/db";
+import { invalidate } from "@/lib/cache";
 import { getSettings } from "@/lib/data";
 import type { Settings } from "@/lib/types";
 
@@ -20,5 +21,6 @@ export const PUT = route(async (req) => {
     childRatio: Math.min(1, Math.max(0, num(b.childRatio, cur.childRatio))),
   };
   await (await col<Settings>("settings")).updateOne({ _id: "main" }, { $set: next }, { upsert: true });
+  invalidate("settings");
   return { ok: true };
 });

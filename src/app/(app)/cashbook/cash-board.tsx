@@ -14,6 +14,7 @@ export function CashBoard({ txs, canDelete }: { txs: S<Transaction>[]; canDelete
   const [type, setType] = useState<"all" | "thu" | "chi">("all");
   const [month, setMonth] = useState("all");
   const [open, setOpen] = useState(false);
+  const [limit, setLimit] = useState(60);
   const [f, setF] = useState({ type: "chi", kind: "expense", amountVnd: 0, date: todayIso(), method: "Chuyển khoản", partyName: "", note: "" });
 
   const months = useMemo(() => Array.from(new Set(txs.map((t) => t.date.slice(0, 7)))).sort().reverse(), [txs]);
@@ -53,7 +54,7 @@ export function CashBoard({ txs, canDelete }: { txs: S<Transaction>[]; canDelete
             <table className="tbl">
               <thead><tr><th>Ngày</th><th>Loại</th><th>Đối tượng / nội dung</th><th>Hình thức</th><th className="num">Số tiền</th>{canDelete && <th><span className="sr-only">Xoá</span></th>}</tr></thead>
               <tbody>
-                {shown.map((t) => (
+                {shown.slice(0, limit).map((t) => (
                   <tr key={t.id}>
                     <td className="whitespace-nowrap">{fmtDate(t.date)}</td>
                     <td><Badge tone={t.type === "thu" ? "green" : "red"}>{t.type === "thu" ? "Thu" : "Chi"} · {TX_KIND_LABEL[t.kind]}</Badge></td>
@@ -65,6 +66,11 @@ export function CashBoard({ txs, canDelete }: { txs: S<Transaction>[]; canDelete
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {shown.length > limit && (
+          <div className="border-t border-line/70 p-3 text-center">
+            <Button variant="ghost" size="sm" onClick={() => setLimit((n) => n + 60)}>Xem thêm giao dịch ({shown.length - limit} còn lại)</Button>
           </div>
         )}
       </Card>

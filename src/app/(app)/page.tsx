@@ -155,7 +155,7 @@ export default async function DashboardPage() {
                   <tr key={u.id}>
                     <td>
                       <Link href={`/bookings/${u.id}`} className="group flex min-w-[260px] items-center gap-3">
-                        <Cover src={u.cover} className="size-12 shrink-0 rounded-xl" />
+                        <Cover src={u.cover} w={128} className="size-12 shrink-0 rounded-xl" />
                         <span className="min-w-0">
                           <span className="block truncate font-semibold text-ink group-hover:text-brand-700">{u.title}</span>
                           <span className="block truncate text-xs text-ink-3">{u.groupName}</span>

@@ -45,7 +45,7 @@ export function BookingDetail({
     <>
       <Card className="overflow-hidden">
         <div className="grid md:grid-cols-[260px_1fr]">
-          <Cover src={b.cover} className="h-44 w-full md:h-full" />
+          <Cover src={b.cover} w={640} priority className="h-44 w-full md:h-full" />
           <div className="p-5 sm:p-6">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={b.kind === "package" ? "gold" : "sea"}>{b.kind === "package" ? "Tour trọn gói" : "Dịch vụ lẻ"}</Badge>

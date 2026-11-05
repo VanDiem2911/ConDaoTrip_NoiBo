@@ -2,6 +2,7 @@ import type { Filter } from "mongodb";
 import { col, ser } from "./db";
 import { isBackoffice } from "./access";
 import { bookingFinance } from "./booking";
+import { memo } from "./cache";
 import { DEFAULT_RATES, todayIso } from "./money";
 import type {
   Booking, Customer, Quote, Service, SessionUser, Settings, Supplier, Tour, Transaction, User,
@@ -12,7 +13,10 @@ export type S<T extends { _id: string }> = Omit<T, "_id"> & { id: string };
 /* ------------------------------------------------------------------ */
 /* Cài đặt                                                             */
 /* ------------------------------------------------------------------ */
-export async function getSettings(): Promise<Settings> {
+export function getSettings(): Promise<Settings> {
+  return memo("settings", 30_000, loadSettings);
+}
+async function loadSettings(): Promise<Settings> {
   const c = await col<Settings>("settings");
   const s = await c.findOne({ _id: "main" });
   return (
@@ -29,14 +33,14 @@ export async function getSettings(): Promise<Settings> {
 /* ------------------------------------------------------------------ */
 /* Danh mục                                                            */
 /* ------------------------------------------------------------------ */
-export async function getCatalog(user: SessionUser) {
+export function getCatalog(user: SessionUser) {
   const staff = user.role !== "customer";
-  const f = staff ? {} : { active: true };
-  const [tours, services] = await Promise.all([
-    (await col<Tour>("tours")).find(f).toArray(),
-    (await col<Service>("services")).find(f).toArray(),
-  ]);
-  return { tours: tours.map(ser), services: services.map(ser) };
+  return memo(`catalog:${staff}`, 30_000, async () => {
+    const f = staff ? {} : { active: true };
+    const [toursCol, servicesCol] = await Promise.all([col<Tour>("tours"), col<Service>("services")]);
+    const [tours, services] = await Promise.all([toursCol.find(f).toArray(), servicesCol.find(f).toArray()]);
+    return { tours: tours.map(ser), services: services.map(ser) };
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -120,12 +124,14 @@ export function daysUntil(dateIso: string): number {
 /* Booking                                                             */
 /* ------------------------------------------------------------------ */
 export async function listBookings(user: SessionUser) {
-  const rows = await (await col<Booking>("bookings")).find(bookingScope(user)).sort({ travelDate: -1 }).toArray();
-  const paid = isBackoffice(user.role) ? await paidMap() : new Map<string, PaidInfo>();
-  return rows.map((b) => {
+  const [bookings, paid] = await Promise.all([
+    col<Booking>("bookings").then((c) => c.find(bookingScope(user)).sort({ travelDate: -1 }).toArray()),
+    isBackoffice(user.role) ? paidMap() : Promise.resolve(new Map<string, PaidInfo>()),
+  ]);
+  return bookings.map((b) => {
     const fin = bookingFinance(b);
     const p = paid.get(b._id) ?? EMPTY_PAID;
-    const view = shapeBooking(b, user.role);
+    const { lines: _lines, items: _items, ...view } = shapeBooking(b, user.role);
     return {
       ...view,
       progress: { arranged: fin.arranged, total: fin.total, complete: fin.complete },
@@ -140,10 +146,12 @@ export async function getBookingDetail(id: string, user: SessionUser) {
   if (!b) return null;
   const fin = bookingFinance(b);
   const back = isBackoffice(user.role);
-  const txs = back
-    ? (await (await col<Transaction>("transactions")).find({ bookingId: id }).sort({ date: 1 }).toArray()).map(ser)
+  const raw = back
+    ? await (await col<Transaction>("transactions")).find({ bookingId: id, type: "thu" }).sort({ date: 1 }).toArray()
     : [];
-  const p = back ? (await paidMap()).get(id) ?? EMPTY_PAID : EMPTY_PAID;
+  const txs = raw.map(ser);
+  const sumKind = (k: string) => raw.filter((t) => t.kind === k).reduce((s, t) => s + t.amountVnd, 0);
+  const p: PaidInfo = { paid: raw.reduce((s, t) => s + t.amountVnd, 0), deposit: sumKind("deposit"), advance: sumKind("advance"), payment: sumKind("payment") };
   return {
     booking: shapeBooking(b, user.role),
     finance: back
@@ -158,13 +166,17 @@ export async function getBookingDetail(id: string, user: SessionUser) {
 /* ------------------------------------------------------------------ */
 /* Điều hành: hàng đợi dịch vụ cần xếp                                  */
 /* ------------------------------------------------------------------ */
+export async function getActiveSuppliers() {
+  const rows = await (await col<Supplier>("suppliers")).find({ active: true }).sort({ name: 1 }).toArray();
+  return rows.map(ser);
+}
+
 export async function getOperations() {
-  const rows = await (await col<Booking>("bookings"))
-    .find({ status: "confirmed" })
-    .sort({ travelDate: 1 })
-    .toArray();
-  const suppliers = (await (await col<Supplier>("suppliers")).find({ active: true }).sort({ name: 1 }).toArray()).map(ser);
-  return { bookings: rows.map(ser), suppliers };
+  const [rows, suppliers] = await Promise.all([
+    col<Booking>("bookings").then((c) => c.find({ status: "confirmed" }, { projection: { items: 0 } }).sort({ travelDate: 1 }).toArray()),
+    getActiveSuppliers(),
+  ]);
+  return { bookings: rows.map((b) => ser({ ...b, items: [] })), suppliers };
 }
 
 /* ------------------------------------------------------------------ */
@@ -180,8 +192,11 @@ export interface SupplierLedger {
 }
 
 export async function getSupplierDebts() {
-  const bookings = await (await col<Booking>("bookings")).find({ status: "confirmed" }).toArray();
-  const txs = await (await col<Transaction>("transactions")).find({ type: "chi", kind: "supplier" }).sort({ date: -1 }).toArray();
+  const [bookings, txs] = await Promise.all([
+    col<Booking>("bookings").then((c) =>
+      c.find({ status: "confirmed" }, { projection: { code: 1, groupName: 1, travelDate: 1, lines: 1 } }).toArray()),
+    col<Transaction>("transactions").then((c) => c.find({ type: "chi", kind: "supplier" }).sort({ date: -1 }).toArray()),
+  ]);
   const map = new Map<string, SupplierLedger>();
   const get = (id: string) => {
     let e = map.get(id);
@@ -221,11 +236,20 @@ export async function listSuppliers() {
 /* ------------------------------------------------------------------ */
 /* Khách hàng (CRM)                                                    */
 /* ------------------------------------------------------------------ */
+/** Chỉ id/tên/sale của khách — đủ cho ô chọn khách trong form báo giá (không quét booking) */
+export async function listCustomerOptions(user: SessionUser) {
+  const f: Filter<Customer> = user.role === "sale" ? { saleId: user.id } : {};
+  const rows = await (await col<Customer>("customers")).find(f, { projection: { name: 1, saleId: 1 } }).sort({ name: 1 }).toArray();
+  return rows.map((c) => ({ id: c._id, name: c.name, saleId: c.saleId }));
+}
+
 export async function listCustomers(user: SessionUser) {
   const f: Filter<Customer> = user.role === "sale" ? { saleId: user.id } : {};
-  const customers = await (await col<Customer>("customers")).find(f).sort({ name: 1 }).toArray();
-  const bookings = await (await col<Booking>("bookings")).find({ status: "confirmed" }).toArray();
-  const paid = await paidMap();
+  const [customers, bookings, paid] = await Promise.all([
+    col<Customer>("customers").then((c) => c.find(f).sort({ name: 1 }).toArray()),
+    col<Booking>("bookings").then((c) => c.find({ status: "confirmed" }, { projection: { customerId: 1, sellVnd: 1, travelDate: 1 } }).toArray()),
+    paidMap(),
+  ]);
   return customers.map((c) => {
     const mine = bookings.filter((b) => b.customerId === c._id);
     const sell = mine.reduce((s, b) => s + b.sellVnd, 0);
@@ -279,12 +303,32 @@ export interface FinanceRow {
   title: string;
 }
 
+async function commissionPaidMap(): Promise<Map<string, number>> {
+  const rows = await (await col<Transaction>("transactions"))
+    .aggregate<{ _id: string; v: number }>([
+      { $match: { kind: "commission", bookingId: { $exists: true } } },
+      { $group: { _id: "$bookingId", v: { $sum: "$amountVnd" } } },
+    ])
+    .toArray();
+  return new Map(rows.map((r) => [r._id, r.v]));
+}
+
 export async function financeRows(user: SessionUser): Promise<FinanceRow[]> {
-  const rows = await (await col<Booking>("bookings")).find({ status: "confirmed", ...(bookingScope(user) as object) }).toArray();
-  const paid = await paidMap();
-  const comm = await (await col<Transaction>("transactions")).find({ kind: "commission" }).toArray();
-  const commPaid = new Map<string, number>();
-  for (const t of comm) if (t.bookingId) commPaid.set(t.bookingId, (commPaid.get(t.bookingId) ?? 0) + t.amountVnd);
+  return (await loadFinance(user)).rows;
+}
+
+/** Nạp booking + tiền đã thu + hoa hồng đã chi song song; trả cả booking thô để trang khác dùng lại (không truy vấn lần 2) */
+export async function loadFinance(user: SessionUser) {
+  const back = isBackoffice(user.role);
+  const [bookings, paid, commPaid] = await Promise.all([
+    col<Booking>("bookings").then((c) => c.find({ status: "confirmed", ...(bookingScope(user) as object) }).toArray()),
+    back ? paidMap() : Promise.resolve(new Map<string, PaidInfo>()),
+    back ? commissionPaidMap() : Promise.resolve(new Map<string, number>()),
+  ]);
+  return { bookings, rows: buildFinanceRows(bookings, paid, commPaid) };
+}
+
+function buildFinanceRows(rows: Booking[], paid: Map<string, PaidInfo>, commPaid: Map<string, number>): FinanceRow[] {
   return rows
     .map((b) => {
       const f = bookingFinance(b);
@@ -333,11 +377,13 @@ export function redactFinance(rows: FinanceRow[], role: SessionUser["role"]): Fi
 }
 
 export async function getDashboard(user: SessionUser) {
-  const [fin, catalog, bookingsRaw] = await Promise.all([
-    financeRows(user).then((r) => (isBackoffice(user.role) ? r : redactFinance(r, user.role))),
+  const [loaded, catalog, quotes] = await Promise.all([
+    loadFinance(user),
     getCatalog(user),
-    (await col<Booking>("bookings")).find({ status: "confirmed", ...(bookingScope(user) as object) }).sort({ travelDate: 1 }).toArray(),
+    user.role === "sale" ? listQuotes(user) : Promise.resolve([]),
   ]);
+  const fin = isBackoffice(user.role) ? loaded.rows : redactFinance(loaded.rows, user.role);
+  const bookingsRaw = [...loaded.bookings].sort((a, b) => (a.travelDate < b.travelDate ? -1 : 1));
   const today = todayIso();
   const months = monthWindow(4, 1);
   const series = months.map((m) => {
@@ -364,7 +410,6 @@ export async function getDashboard(user: SessionUser) {
     });
   const pendingLines = bookingsRaw.reduce((s, b) => s + b.lines.filter((l) => l.status === "pending").length, 0);
   const owedRows = fin.filter((r) => r.owed > 0);
-  const quotes = user.role === "customer" || user.role === "sale" ? await listQuotes(user) : [];
   return {
     series,
     upcoming,
@@ -398,10 +443,9 @@ export async function getDashboard(user: SessionUser) {
 /* Báo cáo                                                             */
 /* ------------------------------------------------------------------ */
 export async function getReportData() {
-  const [bookings, fin, txs] = await Promise.all([
-    (await col<Booking>("bookings")).find({ status: "confirmed" }).toArray(),
-    financeRows({ role: "operator" } as SessionUser),
-    (await col<Transaction>("transactions")).find({}).toArray(),
+  const [{ bookings, rows: fin }, txs] = await Promise.all([
+    loadFinance({ role: "operator" } as SessionUser),
+    col<Transaction>("transactions").then((c) => c.find({}, { projection: { type: 1, kind: 1, amountVnd: 1, date: 1 } }).toArray()),
   ]);
   // doanh thu theo tour / dịch vụ (chia theo tỷ trọng thành tiền từng dòng)
   const byItem = new Map<string, { revenue: number; count: number; kind: string }>();

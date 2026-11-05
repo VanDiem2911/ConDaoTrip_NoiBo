@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { isBackoffice, isStaff } from "@/lib/access";
-import { getCatalog, getSettings, listCustomers, listStaff } from "@/lib/data";
+import { getCatalog, getSettings, listCustomerOptions, listStaff } from "@/lib/data";
 import { todayIso } from "@/lib/money";
 import { PageHeader } from "@/components/ui";
 import { QuoteBuilder } from "../quote-builder";
@@ -13,7 +13,7 @@ export default async function NewQuotePage({ searchParams }: { searchParams: Pro
   const [catalog, settings, customers, staff] = await Promise.all([
     getCatalog(user),
     getSettings(),
-    isStaff(user.role) ? listCustomers(user) : Promise.resolve([]),
+    isStaff(user.role) ? listCustomerOptions(user) : Promise.resolve([]),
     isBackoffice(user.role) ? listStaff() : Promise.resolve([]),
   ]);
   return (
@@ -24,7 +24,7 @@ export default async function NewQuotePage({ searchParams }: { searchParams: Pro
         userId={user.id}
         tours={catalog.tours}
         services={catalog.services}
-        customers={customers.map((c) => ({ id: c.id, name: c.name, saleId: c.saleId }))}
+        customers={customers}
         sales={staff.filter((s) => s.role === "sale").map((s) => ({ id: s.id, name: s.name }))}
         rates={settings.rates}
         childRatio={settings.childRatio}

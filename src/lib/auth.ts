@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import { col } from "./db";
+import { memo } from "./cache";
 import type { Role, SessionUser, User } from "./types";
 
 const COOKIE = "cdt_session";
@@ -42,8 +43,9 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secret());
-    const users = await col<User>("users");
-    const u = await users.findOne({ _id: String(payload.uid) });
+    const uid = String(payload.uid);
+    // 15 giây: đủ giảm 1 truy vấn/trang; khoá tài khoản hoặc đổi vai trò có hiệu lực trong tối đa 15 giây
+    const u = await memo(`user:${uid}`, 15_000, async () => (await col<User>("users")).findOne({ _id: uid }));
     if (!u || !u.active) return null;
     return {
       id: u._id,

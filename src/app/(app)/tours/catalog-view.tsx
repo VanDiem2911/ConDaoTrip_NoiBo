@@ -72,7 +72,7 @@ export function CatalogView({ tours, services, canEdit }: { tours: T[]; services
             {shownTours.map((t, i) => (
               <Card key={t.id} className="anim-up flex flex-col overflow-hidden p-0" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
                 <div className="relative">
-                  <Cover src={t.image} alt={t.name} className="aspect-[16/10] w-full" />
+                  <Cover src={t.image} alt={t.name} w={640} priority={i < 3} className="aspect-[16/10] w-full" />
                   <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-2 p-3">
                     <Badge tone="slate" className="bg-white/90 backdrop-blur" icon={<Clock className="size-3" aria-hidden />}>{t.duration}</Badge>
                     {!t.active && <Badge tone="red">Đã đóng</Badge>}

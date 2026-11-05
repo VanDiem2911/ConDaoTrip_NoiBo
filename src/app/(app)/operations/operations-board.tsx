@@ -77,7 +77,7 @@ export function OperationsBoard({ bookings, suppliers }: { bookings: S<Booking>[
             return (
               <Card key={b.id} className="anim-up overflow-hidden">
                 <div className="flex flex-wrap items-center gap-4 border-b border-line/70 p-4 sm:px-6">
-                  <Cover src={b.cover} className="size-14 shrink-0 rounded-2xl" />
+                  <Cover src={b.cover} w={128} className="size-14 shrink-0 rounded-2xl" />
                   <div className="min-w-0 flex-1 basis-60">
                     <div className="flex flex-wrap items-center gap-2">
                       <Link href={`/bookings/${b.id}`} className="text-[16px] font-bold text-ink hover:text-brand-700 hover:underline">{b.groupName}</Link>
